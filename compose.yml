@@ -1,0 +1,57 @@
+services:
+  postgres:
+    image: postgres:18
+    container_name: html_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: html_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_HOST_AUTH_METHOD: trust
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d html_db"]
+      interval: 3s
+      timeout: 3s
+      retries: 5
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: html_pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@local.host
+      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: 'False'
+      PGADMIN_SERVER_JSON_FILE: /pgadmin4/servers.json
+    ports:
+      - "8080:80"
+    volumes:
+      - ./servers.json:/pgadmin4/servers.json:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    build:
+      context: ./HtmlProcessor.Api
+      dockerfile: Dockerfile
+    container_name: html_api
+    restart: unless-stopped
+    ports:
+      - "8090:8090"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=http://+:8090
+      - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=html_db;Username=postgres;Password=postgres
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
